@@ -25,7 +25,7 @@ class Image(object):
 
         vector = np.reshape(matrix, self.config.size[0] * self.config.size[1])
 
-        vector = (vector > np.mean(vector)).astype(int)
+        vector = (vector > np.mean(vector)).astype('int8')
 
         return vector
 
@@ -47,10 +47,21 @@ class Image(object):
 
 class HopfieldNetwork(object):
 
-    pass
+    def __init__(self, config=configuration):
+        self.config = config
+        self.weights = np.zeros(shape=config.size)
+
+        self.images = []
+
+    def add_image(self, filename):
+        image = Image(filename, self.config)
+        self.images.append(image)
+        self.weights += image.weights
 
 if __name__ == "__main__":
     image = Image('brain.jpg')
 
     plt.imshow(image.matrix)
     plt.show()
+
+    print image.vector.shape

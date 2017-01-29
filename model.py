@@ -95,6 +95,15 @@ class HopfieldNetwork(object):
     def state_mat(self):
         return self.state.reshape(self.config.size)
 
+    def state_matches(self, percent):
+        for image in self.images.values():
+            non_match = np.count_nonzero(self.state == image.vector)
+            if float(non_match) / self.weight_size > percent:
+                return True
+        return False
+
+
+
     def reset_state(self, ids, ratios, noise):
 
         images = [self.get_image(id) for id in ids]
@@ -110,7 +119,7 @@ class HopfieldNetwork(object):
 
     @classmethod
     def resolve_state(cls, state, temperature = None):
-        if temperature is None:
+        if temperature is None or temperature == 0:
             state[state > 0] = 1
 
             state[state < 0] = -1
@@ -133,11 +142,13 @@ class HopfieldNetwork(object):
 
     def asynch_step(self):
         state_flat = self.state
-
+        t = time.time()
         for _ in range(self.config.async_speed):
             index = random.randint(0, state_flat.shape[0]-1)
-            new_val = np.sum(self.weights[:,index] * state_flat)
+            #new_val = np.sum(np.inner(self.weights[:,index], state_flat))
+            new_val = np.einsum('i,i->', self.weights[:,index], state_flat)
             state_flat[index] = self.resolve_state(np.array(new_val))
+        log.debug("async took {}".format(time.time()-t))
         self.iterations += self.config.async_speed
         self.state = state_flat
 
@@ -218,7 +229,7 @@ class HopfieldNetwork(object):
     def add_image(self, filename, strength=1):
         log.debug("Adding image {}".format(filename))
         if filename in self.images:
-            raise HopfieldException("Image {} already exists in library".format(basename))
+            raise HopfieldException("Image {} already exists in library".format(filename))
 
         image = Image(filename, self.config)
         self.images[filename] = image

@@ -1,3 +1,7 @@
+import json
+import os
+
+DEFAULT_SETTINGS_LOCATION = './default_settings.json'
 
 class Configuration(object):
 
@@ -13,22 +17,45 @@ configuration = Configuration()
 
 class Settings(Configuration):
 
-    size = (75,75)
+    defaults = dict(
+        size=(75, 75),
+        match_percent=99.9,
+        image_lib_dir='./images',
+        flipped_noise=False,
+        async_speed=200,
+        synchronous=False,
+        temperature=None,
+        stop_percentage=None
+    )
 
-    match_percent = 99.9
+    def __init__(self, filename=None):
+        self.filename = filename
+        values = Settings.defaults.copy()
+        self.values = values
+        print self.values
+        if filename is not None:
+            if os.path.exists(filename):
+                self.load(filename)
 
-    image_lib_dir = './images'
+    def __getattr__(self, item):
+        if item == 'values':
+            return {}
+        return self.values[item]
 
-    flipped_noise = False
+    def __setattr__(self, name, value):
+        if name in Settings.defaults:
+            self.values[name] = value
+            return
+        return super(Settings, self).__setattr__(name, value)
 
-    async_speed = 200
+    def load(self, filename):
+        self.filename = filename
+        self.values.update(json.load(open(filename)))
 
-    synchronous = False
-
-    temperature = None
-
-    stop_percentage = None
-
+    def save(self, filename):
+        self.filename = filename
+        json.dump(self.values, open(filename, 'w'),
+                  indent=2)
 
 
-settings = Settings()
+settings = Settings(DEFAULT_SETTINGS_LOCATION)

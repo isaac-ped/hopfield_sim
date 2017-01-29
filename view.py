@@ -7,7 +7,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import numpy as np
 import matplotlib.pyplot as plt
-
+import time
 
 import logging
 logging.basicConfig()
@@ -42,6 +42,7 @@ class HopfieldWidget(QWidget):
 
         self.animation = HopfieldAnimationWidget(model, config)
         self.settings = HopfieldSettingsWidget(model, config, self.animation)
+        self.tabs.currentChanged.connect(self.settings.apply)
 
         self.tabs.addTab(self.animation, "Simulation")
         self.tabs.addTab(self.settings, "Settings")
@@ -101,10 +102,11 @@ class HopfieldAnimationWidget(QWidget):
 
         self.figure = plt.figure()
         self.ax = self.figure.add_axes([.05,.05,.9,.9])
+        self.ax.axis('off')
 
         self.canvas = FigureCanvas(self.figure)
-        self.im = self.ax.imshow(np.random.choice([-1, 1], config.size, True))
-
+        self.im = self.ax.imshow(np.random.choice([-1, 1], config.size, True), cmap='bone')
+        self.figure.canvas.draw()
 
         self.layout.addWidget(self.canvas)
 
@@ -113,6 +115,7 @@ class HopfieldAnimationWidget(QWidget):
         self.set_model(model)
 
         self.animation = None
+        self.t_last = 0
 
     def go_pressed(self):
         if self.going:
@@ -120,14 +123,16 @@ class HopfieldAnimationWidget(QWidget):
             self.animation.event_source.stop()
         else:
             if self.animation is None:
-                self.animation = FuncAnimation(self.figure, self.step, interval=0, blit=True)
+                self.animation = FuncAnimation(self.figure, self.step, interval=.00, blit=False)
             self.go_button.setText("Stop")
             self.animation.event_source.start()
+            self.figure.canvas.draw()
         self.going = not self.going
 
     def step_pressed(self):
         self.model.step()
         self.update_view()
+        self.figure.canvas.draw()
 
     def reset(self):
         noise_percentage = float(self.noise_edit.text()) / 100
@@ -136,26 +141,33 @@ class HopfieldAnimationWidget(QWidget):
         log.debug("Ratios are {}".format(ratios))
         self.model.reset_state(range(len(ratios)), ratios, noise_percentage)
         self.update_view()
+        self.figure.canvas.draw()
 
     def step(self, *_):
+        t1 = time.time()
+        log.debug("Time since last {}".format(t1-self.t_last))
         self.model.step()
+        t = time.time()
+        log.debug("Step took {}".format(t-t1))
         self.update_view()
+        log.debug("View update took {}".format(time.time()-t))
+        self.t_last = time.time()
+
+        if self.config.match_percent is not None and \
+                self.model.state_matches(self.config.match_percent):
+            self.animation.event_source.stop()
         return self.im,
 
     def size_changed(self):
         log.debug("Reset size to {}".format(self.config.size))
-        self.im = self.ax.imshow(np.random.choice([-1, 1], self.config.size, True), aspect='auto')
+        self.im.remove()
+        self.im = self.ax.imshow(np.random.choice([-1, 1], self.config.size, True),
+                                 cmap='copper')
 
     def update_view(self):
         self.im.set_data(self.model.state_mat)
-        self.figure.canvas.draw()
-        plt.draw()
         self.iteration_label.setText("Iterations: {}".format(self.model.iterations))
 
-    def image_selected(self):
-        selected = self.lib_table.currentIndex()
-        image = self.model.get_image(selected.row())
-        self.plot.set_array(image.matrix)
 
     def get_initial_ratios(self):
         ratios = []
@@ -249,6 +261,7 @@ class HopfieldSettingsWidget(QWidget):
         self.save_button = QPushButton("Save")
         self.save_button.clicked.connect(self.save)
         self.load_button = QPushButton("Load")
+        self.load_button.clicked.connect(self.load)
 
         lib_layout = QHBoxLayout()
         lib_layout.addWidget(self.lib_button)
@@ -278,12 +291,6 @@ class HopfieldSettingsWidget(QWidget):
         size_layout.addWidget(QLabel("x"))
         size_layout.addWidget(self.size_y_edit)
         sidebar.addLayout(size_layout)
-
-        sidebar.addWidget(self.stop_on_match_cb)
-        stopping_layout = QHBoxLayout()
-        stopping_layout.addWidget(perc_match_label)
-        stopping_layout.addWidget(self.perc_match_edit)
-        sidebar.addLayout(stopping_layout)
 
         sidebar.addWidget(self.temperature_cb)
         temp_layout = QHBoxLayout()
@@ -326,7 +333,8 @@ class HopfieldSettingsWidget(QWidget):
         self.figure = plt.figure()
         self.axes = self.figure.add_axes([.05,.05,.9,.9])
         self.canvas = FigureCanvas(self.figure)
-        self.plot = self.axes.imshow(np.zeros(config.size), figure=self.figure, aspect='auto')
+        self.plot = self.axes.imshow(np.zeros(config.size), figure=self.figure, aspect='auto',
+                                     cmap='bone')
 
         main_layout.addWidget(self.canvas)
 
@@ -336,6 +344,20 @@ class HopfieldSettingsWidget(QWidget):
 
         self.set_model(model)
         self.set_config(config)
+
+    def save(self):
+        self.apply()
+        filename,_ = QFileDialog.getSaveFileName(None, 'Save config', self.config.filename)
+        if filename:
+            self.config.save(str(filename))
+
+    def load(self):
+        filename, _ = QFileDialog.getOpenFileName(None, 'Load config', self.config.filename)
+        if filename.text:
+            self.config.load(filename.text)
+            self.set_config(self.config)
+            self.model.clear()
+            self.model.add_directory(self.config.image_lib_dir)
 
     def lib_strength_changed(self):
         self.lib_table.resizeColumnsToContents()
@@ -350,7 +372,7 @@ class HopfieldSettingsWidget(QWidget):
             except Exception as e:
                 log.error("Could not set strength to {}: {}".format(strength, e))
 
-    def save(self):
+    def apply(self):
         self.config.async_speed = int(self.speed_edit.text())
         new_size = int(self.size_x_edit.text()), int(self.size_y_edit.text())
         size_changed = new_size != self.config.size
@@ -403,7 +425,7 @@ class HopfieldSettingsWidget(QWidget):
     def image_selected(self):
         selected = self.lib_table.currentIndex()
         image = self.model.get_image(selected.row())
-        plt.imshow(image.matrix, figure=self.figure)
+        plt.imshow(image.matrix, figure=self.figure, cmap='bone')
         self.figure.canvas.draw()
         log.debug("Settings canvas updated")
 

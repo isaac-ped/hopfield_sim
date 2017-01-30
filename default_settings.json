@@ -1,6 +1,6 @@
 {
   "temperature": 500.0, 
-  "synchronous": false, 
+  "synchronous": true, 
   "async_speed": 400, 
   "match_percent": 99.9, 
   "flipped_noise": false, 

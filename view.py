@@ -63,10 +63,14 @@ class HopfieldAnimationWidget(QWidget):
 
         self.go_button = QPushButton("Go")
         self.go_button.clicked.connect(self.go_pressed)
+        self.go_button.setMaximumWidth(200)
         self.step_button = QPushButton("Step")
         self.step_button.clicked.connect(self.step_pressed)
+        self.step_button.setMaximumWidth(200)
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.reset)
+        self.reset_button.setMaximumWidth(200)
+
 
         self.iteration_label = QLabel("Iterations: 0")
 
@@ -83,8 +87,10 @@ class HopfieldAnimationWidget(QWidget):
 
         noise_box = QHBoxLayout()
         noise_label = QLabel("Percent Noise")
+        noise_label.setMaximumWidth(100)
         self.noise_edit = QLineEdit("50")
         self.noise_edit.textChanged.connect(self.noise_edited)
+        self.noise_edit.setMaximumWidth(100)
         noise_box.addWidget(noise_label)
         noise_box.addWidget(self.noise_edit)
 
@@ -105,7 +111,7 @@ class HopfieldAnimationWidget(QWidget):
         self.ax.axis('off')
 
         self.canvas = FigureCanvas(self.figure)
-        self.im = self.ax.imshow(np.random.choice([-1, 1], config.size, True), cmap='bone')
+        self.im = self.ax.imshow(np.random.choice([-1, 1], config.size, True), cmap='copper')
         self.figure.canvas.draw()
 
         self.layout.addWidget(self.canvas)
@@ -375,7 +381,9 @@ class HopfieldSettingsWidget(QWidget):
     def apply(self):
         self.config.async_speed = int(self.speed_edit.text())
         new_size = int(self.size_x_edit.text()), int(self.size_y_edit.text())
-        size_changed = new_size != self.config.size
+        size_changed = list(new_size) != list(self.config.size)
+        if size_changed:
+            log.debug("Size changed from {} to {}".format(self.config.size, new_size))
         self.config.size = new_size
         self.config.stop_percentage = float(self.perc_match_edit.text()) \
                 if self.stop_on_match_cb.isChecked() else None

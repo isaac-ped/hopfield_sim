@@ -87,7 +87,7 @@ class HopfieldNetwork(object):
         self.images    = OrderedDict()
         self.strengths = OrderedDict()
 
-        self.state = np.zeros(shape = (1, self.weight_size), dtype=bool)
+        self.state = np.zeros(shape = (self.weight_size), dtype=bool)
 
         self.iterations = 0
 
@@ -169,7 +169,7 @@ class HopfieldNetwork(object):
 
         rands = np.random.rand(self.weight_size) * max_limit
 
-        state = np.zeros(shape = self.weight_size)
+        state = np.ones(shape = self.weight_size) * -1
 
         for i, (min_lim, max_lim) in enumerate(zip(limits, limits[1:])):
             mask = np.logical_and(rands>=min_lim, rands<max_lim)
